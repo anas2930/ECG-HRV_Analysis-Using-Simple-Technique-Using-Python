@@ -1,99 +1,61 @@
-What you'll learn
+This is a simple, step by step guide to understanding ECG (electrocardiogram) signal processing in Python. It walks through everything from loading a real heart recording, all the way to calculating meaningful heart rate numbers. It was built while learning, using the MIT BIH Arrhythmia Database, a free and widely used collection of real ECG recordings used in research.
+The goal of this guide is to explain things in plain language, so that someone with basic Python knowledge but no background in biomedical signals can follow along and actually understand what is happening at each step, not just copy code.
 
-By the end of this walkthrough you'll understand how to:
+**Results**
+Running the full pipeline on Record 100 gave the following results. Detected beats: 2309. Reference beats marked by an expert cardiologist: 2273. Sensitivity: 99.60 percent. Precision: 98.05 percent. F1 Score: 98.82 percent. DER: 0.0239. SDNN: 66.09 ms. RMSSD: 90.28 ms. pNN50: 13.10 percent.
 
-Load and inspect a real clinical ECG recording
-Visualize a raw ECG signal
-Filter out noise (baseline drift, powerline interference) without distorting the heartbeat
-Detect R-peaks (the sharp spikes that mark each heartbeat) and check your detector against expert-labeled ground truth
-Turn a list of heartbeat timestamps into Heart Rate Variability (HRV) metrics
-Prerequisites
-Basic Python (loops, functions, arrays)
-High-school-level familiarity with the idea of a "signal" — don't worry, the ideas below are explained from scratch
-bash
-pip install wfdb numpy scipy matplotlib
-Getting the data
+The three images below show the **raw signal, the signal after filtering, and the detected heartbeats ** compared against the expert labeled reference beats. Notice how closely the detected beats line up with the reference ones.
 
-This repo does not include the raw ECG files — you download them directly from PhysioNet, the free, open archive that hosts the MIT-BIH Arrhythmia Database. Easiest way, right from Python:
+Raw ECG signal, first 10 seconds, Record 100.
+Raw signal compared with the filtered signal, showing how much cleaner it looks after filtering.
+Detected R peaks compared with the reference beats, showing very close agreement.
 
-python
-import wfdb
-wfdb.dl_database('mitdb', dl_dir='mitdb', records=['100'])
+**Step 1: Loading the data and understanding what is inside it**
+An ECG recording is not just one simple number, it comes with extra information attached to it, called metadata. This includes things like how many times per second the heart activity was measured, how long the recording is, and how many channels or leads of data were recorded.
 
-This pulls down the .dat (raw signal), .hea (header/metadata), and .atr (expert annotations — where a cardiologist marked every real heartbeat) files for those two records. Run your scripts from inside that folder, or point wfdb.rdrecord() at the right path.
+The most important idea to understand here is sampling frequency, often written as fs. An ECG signal is not a smooth continuous line inside a computer, it is actually made up of thousands of individual voltage readings taken very quickly, one after another. In this dataset, the heart's electrical activity is measured 360 times every single second. A higher sampling frequency means more detail is captured about the heartbeat, but it also means more data to work with.
+This first step is simply about getting comfortable with the data itself. How long is the recording, how many leads does it have, and what does the raw numbers actually look like before anything is done to them.
 
-What is MIT-BIH? It's the most widely used public ECG dataset in research — about 48 half-hour recordings, digitized at 360 Hz, each hand-annotated beat-by-beat by cardiologists. It's the standard benchmark almost every QRS/R-peak detection paper tests against.
+**Step 2: Visualizing the raw signal**
+Before applying any processing to a signal, it is always a good idea to simply look at it first. This step creates a time axis for the signal, since the raw data by itself is just a list of numbers with no timestamps attached, and then plots the first several seconds so it can be seen visually.
+The idea behind building a time axis is simple. If there are a certain number of samples taken every second, then any individual sample happened at a specific point in time, which can be calculated by dividing its position in the list by the sampling frequency.
+At this stage, the signal usually looks a bit messy compared to a clean textbook ECG picture. There is often a slow wandering baseline, almost like the whole signal is gently drifting up and down, along with some sharper high frequency noise sitting on top of the actual heartbeat shape. This is completely normal and expected, and it is exactly what the next step is designed to fix.
 
-Step 1 — Load the data and look at what's inside
+**Step 3: Filtering the signal**
+Raw ECG signals contain more than just the heartbeat, they also contain unwanted interference. This includes very slow baseline wandering caused by things like breathing or slight movement, as well as fast high frequency noise coming from muscle activity or nearby electronics.
+Research has shown that the clinically useful part of an ECG waveform mostly lives between 0.5 Hz and 40 Hz. So a filter that keeps everything inside that range and removes everything outside of it cleans the signal up significantly, without losing the actual heartbeat information. This range is also commonly used with hardware ECG sensors.
+The type of filter used here is called a Butterworth filter, which is a standard and well behaved filter design. It does not distort the shape of the signal much while removing noise, which matters a lot, because distorting the heartbeat shape would make later steps less accurate.
+There is also an important technical detail worth understanding. The filter is applied in a special way that runs it forward through the signal and then backward again. This cancels out a side effect called phase delay, which would otherwise slightly shift the position of the heartbeats in time. Since later steps depend on precise timing between heartbeats, this correction is necessary for accurate results.
 
-File: step_01_load_data.py
+**Step 4: Detecting heartbeats and checking accuracy**
+The R peak is the tall, sharp spike that appears once during every single heartbeat. It is the easiest and most reliable point to detect on an ECG signal, which is why almost every heart rate detection method is built around finding these peaks first.
+This step works in three parts. First, the filtered signal is normalized, meaning it is rescaled so that its average value is zero and its variation is consistent, which allows the same detection settings to work well across different recordings. Second, a peak finding method is used, along with a rule that prevents two detected heartbeats from being impossibly close together, based on a realistic maximum heart rate. Third, and most importantly, the detected heartbeats are compared against expert labeled reference beats that come included with the dataset. These reference labels were placed by real cardiologists, so comparing against them tells us how good the detection actually is.
+On Record 100, this comparison showed extremely strong results, with 99.6 percent of real heartbeats correctly detected, and 98.05 percent of all detected beats being genuinely correct. This is a strong outcome for a fairly simple detection method.
 
-An ECG record isn't just one number — wfdb gives you an object with the signal itself plus metadata: sampling frequency, number of leads, duration, etc.
+**Step 5**
+If there is an additional step used between detecting heartbeats and calculating heart rate variability, it belongs here. Otherwise, this step can be skipped, and the next step becomes the final one in the sequence.
 
-Key idea — sampling frequency (fs): the ECG isn't a smooth continuous line in your computer; it's thousands of discrete voltage measurements per second. MIT-BIH records at 360 Hz, meaning 360 voltage readings every second. Higher fs = finer time resolution, but more data to process.
+**Step 6: Heart Rate Variability analysis**
+Once the exact timing of every heartbeat is known, it becomes possible to measure how much the time between heartbeats changes over time. This is called Heart Rate Variability, and it is a well studied and meaningful indicator of how the nervous system is influencing the heart.
+The process starts by calculating the time gap between every pair of consecutive heartbeats, measured in milliseconds. Any gaps that fall outside a realistic physical range are removed, since these usually indicate a missed or incorrectly detected heartbeat rather than a real change in heart rhythm.
+From the remaining clean data, three commonly used measurements are calculated. SDNN measures the overall variability across all heartbeat intervals. RMSSD focuses more on short term, beat to beat changes, and is calculated from the differences between consecutive intervals. pNN50 measures the percentage of times the heartbeat interval changed by more than 50 milliseconds from one beat to the next.
+These three measurements are the standard starting point in heart rate variability research, and there is also a more advanced frequency based analysis that can be explored later as a natural next step.
+A small technical note here. In this script, the sampling frequency is fetched from the recording itself, but then immediately replaced with a fixed value of 360. This works correctly here because this particular dataset always uses 360 as its sampling frequency, but it is worth knowing that this would need to be changed if a different recording with a different sampling frequency were used instead.
 
-This step is just about getting comfortable with the object: how long is the recording, how many leads (channels) does it have, what does the raw array look like.
+**Getting the data**
+This project does not include the actual ECG recording files. Instead, they should be downloaded directly from PhysioNet, which is a free and open archive that hosts the MIT BIH Arrhythmia Database. This can be done directly from within Python using the wfdb library's built in download function, specifying Record 100.
+What is MIT BIH. It is the most widely used public ECG dataset in research, made up of about 48 half hour recordings, each one digitized at 360 samples per second, and each one hand labeled beat by beat by cardiologists. It is considered the standard benchmark that most heartbeat detection research is tested against.
 
-Step 2 — Visualize the raw signal
+**A note for learners:**
+This guide focuses on one lead of one recording to keep things simple and easy to follow. Every idea introduced here, sampling frequency, filtering, peak detection, and variability analysis, applies the same way to any other ECG recording, and to real hardware sensors as well. Once these fundamentals feel comfortable, trying the same steps on a different record, or comparing results between two different people's recordings, is a great way to deepen understanding.
 
-File: step_02_visualize_raw.py
+**Helpful resources to learn more**
+> PhysioNet's MIT BIH Arrhythmia Database page, which hosts the dataset itself along with full documentation.
 
-Before doing anything else to a signal, look at it. This step builds a time axis (since the raw data is just a list of voltages with no explicit timestamps) and plots the first several seconds.
+> The wfdb python library documentation, which explains the tool used to read the recordings.
 
-Key idea — building a time axis: if you have fs samples per second, then sample number i occurred at time i / fs seconds. That's literally the whole formula (np.arange(len(signal)) / fs).
+> The original 1985 paper by Pan and Tompkins titled A Real Time QRS Detection Algorithm, published in IEEE Transactions on Biomedical Engineering. This is the classic paper that most modern heartbeat detection methods are still based on in some form.
 
-At this stage the signal will look noisy and "off" compared to a textbook ECG — there's usually a slow wandering baseline and some high-frequency noise sitting on top of the heartbeat waveform. That's expected, and it's exactly what Step 3 fixes.
+> The 1996 Heart Rate Variability standards paper published in the journal Circulation by the Task Force of the European Society of Cardiology and the North American Society of Pacing and Electrophysiology. This is the reference standard that defines SDNN, RMSSD, pNN50, and related measurements.
 
-Step 3 — Filtering
-
-File: step_03_filter.py
-
-Raw ECG is contaminated by things that aren't the heartbeat:
-
-Baseline wander (very low frequency, <0.5 Hz) — caused by breathing, body movement, electrode contact shifting
-High-frequency noise (>40 Hz) — muscle activity, electronics
-
-The clinically useful part of an ECG waveform lives roughly between 0.5 Hz and 40 Hz, so a bandpass filter that keeps that range and discards everything else cleans the signal up dramatically. This matches the frequency range commonly used with hardware front-ends like the AD8232 sensor.
-
-Key idea — Butterworth filter: a standard, "maximally flat" filter design — it doesn't ring or distort the passband much, which matters because we don't want to distort the actual heartbeat shape while removing noise. The butter() call here uses a 3rd-order filter, a reasonable default for ECG work.
-
-Key idea — filtfilt vs lfilter: filtfilt runs the filter forward, then backward, which cancels out the phase delay a normal filter would introduce. Phase delay would shift your peaks in time, which would ruin any timing-based analysis (like the beat intervals we care about in Step 4 and Step 6) — so filtfilt is the correct choice for this kind of offline analysis.
-
-Step 4 — R-peak detection and validation
-
-File: step_04_r_peak_detection.py
-
-The R-peak is the tall, sharp spike in each heartbeat — it's the easiest and most reliable point to detect, so basically every heart-rate algorithm is built around finding R-peaks first.
-
-This step:
-
-Normalizes the filtered signal (zero mean, unit variance) so a single prominence threshold works across different recordings
-Uses scipy.signal.find_peaks with a minimum distance constraint based on a physiologically realistic maximum heart rate (200 bpm here) — this stops the detector from picking two peaks that are impossibly close together
-Validates against the ground truth: MIT-BIH's .atr annotation files contain the true beat locations, hand-labeled by cardiologists. Comparing your detected peaks against those (within a tolerance window, here 50 ms) gives standard detector-performance metrics — on Record 100, this pipeline hits 99.6% Sensitivity and 98.05% Precision, which is a genuinely strong result for a fairly simple threshold-based detector:
-Sensitivity — of all real beats, what fraction did you catch?
-Precision — of everything you flagged as a beat, what fraction was real?
-F1 score — a single number balancing the two
-DER (Detection Error Rate) — combines false positives and false negatives relative to true beats; commonly reported in QRS-detection literature
-
-This peak detector (threshold + minimum-distance) is a simplified version of the ideas behind the classic Pan–Tompkins algorithm (see references below), which most real-world detectors are still based on in some form.
-
-Step 5 — (add your own step here if you have one)
-
-If you have an R-peak refinement or beat-classification step between detection and HRV analysis, this is where it goes. Otherwise, renumber your HRV script to step_05 so the sequence has no gap.
-
-Step 6 — Heart Rate Variability (HRV) analysis
-
-File: step_06_hrv_analysis.py
-
-Once you know when every heartbeat happened, you can compute how much the time between beats varies — that's HRV, a well-studied marker of autonomic nervous system activity.
-
-R-R intervals — the time gap between consecutive R-peaks, in milliseconds
-Artifact removal — intervals outside a physiologically plausible range (here 400–1500 ms, i.e. 40–150 bpm) are discarded, since a missed or extra detected peak would otherwise show up as an impossible interval and badly skew the stats
-Time-domain HRV metrics:
-SDNN — standard deviation of all R-R intervals; reflects overall variability
-RMSSD — root mean square of successive differences; more sensitive to short-term, beat-to-beat changes
-pNN50 — percentage of successive R-R interval differences greater than 50 ms
-
-These three are the standard starting set in HRV literature — see the Task Force reference below for the full clinical standard (there's also a frequency-domain side — LF/HF ratio via power spectral density — as a natural next step if you want to extend this).
-
-Note on this script: it re-fetches fs from record.fs, then immediately overwrites it with a hardcoded 360. That works because MIT-BIH is always 360 Hz, but it's fragile — worth using record.fs consistently if you reuse this code on other datasets
+The AAMI EC57 standard, which defines how heartbeat detection algorithms should be tested and reported in research, including sensitivity, precision, and detection error rate.
