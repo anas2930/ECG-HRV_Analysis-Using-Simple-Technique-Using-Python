@@ -1,0 +1,8 @@
+Supporting resources:
+1. PhysioNet MIT-BIH Arrhythmia Database — the dataset itself, with full documentation of the annotation symbols
+wfdb-python documentation {the library used to read the records}
+2. (OPTIONAL) Pan, J. & Tompkins, W.J. (1985), "A Real-Time QRS Detection Algorithm," IEEE Transactions on Biomedical Engineering {the classic paper behind most modern R-peak detectors}
+3. Task Force of the European Society of Cardiology and the North American Society of Pacing and Electrophysiology (1996), "Heart Rate Variability: Standards of Measurement, Physiological Interpretation, and Clinical Use," Circulation {the reference standard for HRV metric definitions (SDNN, RMSSD, pNN50, and the frequency-domain metrics}
+4. AAMI EC57 — the industry standard for how to test and report QRS/beat detection algorithm performance (Sensitivity, Precision/PPV, DER) {useful if you want your Step 4 metrics to match what's reported in papers}
+
+Pre-Requisites:

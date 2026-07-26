@@ -1,0 +1,3 @@
+SDNN:  66.09 ms
+RMSSD: 90.28 ms
+pNN50: 13.10 %

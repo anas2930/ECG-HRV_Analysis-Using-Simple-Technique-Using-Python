@@ -1,0 +1,8 @@
+   Accuracy Matrix
+True Positive : 2264
+False Positive: 45
+False Negative: 9
+Sensitivity   : 99.60%
+Precision     : 98.05%
+F1 Score      : 98.82%
+DER           : 0.0239
